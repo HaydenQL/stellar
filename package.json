@@ -41,7 +41,6 @@
   },
   "optionalDependencies": {
     "active-win": "^7.7.2",
-    "discord-rpc": "^4.0.1",
     "electron-store": "^8.2.0",
     "systeminformation": "^5.31.6"
   },
