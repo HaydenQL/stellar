@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [profile, setProfile] = useState(null)
 
   // Listen for auth state changes
   useEffect(() => {
@@ -17,9 +18,20 @@ export function AuthProvider({ children }) {
     }
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s)
       setUser(s?.user ?? null)
+      // Fetch profile on page load if user exists
+      if (s?.user?.id) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', s.user.id)
+            .single()
+          if (data) setProfile(data)
+        } catch { /* ok */ }
+      }
       setLoading(false)
     })
 
@@ -34,21 +46,45 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Fetch the user's profile from Supabase
+  const fetchProfile = useCallback(async (userId) => {
+    if (!userId || !isSupabaseConfigured()) return null
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+      if (data) setProfile(data)
+      return data
+    } catch {
+      return null
+    }
+  }, [])
+
   // Ensure profile row exists after sign-up / first login
   const ensureProfile = useCallback(async (u, tag) => {
     if (!u || !isSupabaseConfigured()) return
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, tag')
         .eq('id', u.id)
         .single()
       if (!data) {
+        // Build tag with #XXXX suffix if not present
+        let finalTag = tag || u.email?.split('@')[0] || 'Player'
+        if (!finalTag.includes('#')) {
+          finalTag += '#' + String(Math.floor(1000 + Math.random() * 9000))
+        }
         await supabase.from('profiles').insert({
           id: u.id,
-          tag: tag || u.email?.split('@')[0] || 'Player',
+          tag: finalTag,
           bio: 'Just here to clip the impossible.',
         })
+        setProfile({ id: u.id, tag: finalTag, bio: 'Just here to clip the impossible.' })
+      } else {
+        setProfile(data)
       }
     } catch {
       // Table may not exist yet — that's fine
@@ -89,8 +125,12 @@ export function AuthProvider({ children }) {
       setError(err.message)
       return null
     }
+    // Fetch profile on login
+    if (data?.user) {
+      await fetchProfile(data.user.id)
+    }
     return data
-  }, [])
+  }, [fetchProfile])
 
   const signOut = useCallback(async () => {
     setError(null)
@@ -105,15 +145,17 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       session,
+      profile,
       loading,
       error,
       signUp,
       signIn,
       signOut,
       clearError,
+      fetchProfile,
       isConfigured: isSupabaseConfigured(),
     }),
-    [user, session, loading, error, signUp, signIn, signOut, clearError],
+    [user, session, profile, loading, error, signUp, signIn, signOut, clearError, fetchProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -10,6 +10,8 @@ import { defaultSettings } from '@/lib/defaultSettings'
 import { isLikelyGame } from '@/lib/gameDetection'
 import { translate } from '@/lib/i18n'
 import { playClipSound } from '@/lib/playClipSound'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase, isSupabaseConfigured } from '@/lib/supabaseClient'
 
 const StellarContext = createContext(null)
 const LS_KEY = 'stellar_settings'
@@ -34,6 +36,7 @@ function persistSettings(s) {
 }
 
 export function StellarProvider({ children }) {
+  const { profile, user } = useAuth()
   const [settings, setSettingsState] = useState(loadSavedSettings)
   const [hydrated, setHydrated] = useState(false)
   const [currentGame, setCurrentGame] = useState({
@@ -42,6 +45,21 @@ export function StellarProvider({ children }) {
     owner: '',
     exePath: '',
   })
+
+  // Sync profileTag from Supabase profile when it becomes available
+  useEffect(() => {
+    if (profile?.tag) {
+      setSettingsState((prev) => {
+        if (prev.profileTag !== profile.tag) {
+          const next = { ...prev, profileTag: profile.tag }
+          if (profile.bio) next.profileBio = profile.bio
+          persistSettings(next)
+          return next
+        }
+        return prev
+      })
+    }
+  }, [profile])
 
   const gameReady = useMemo(
     () => isLikelyGame(currentGame.owner, currentGame.title),

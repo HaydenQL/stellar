@@ -56,7 +56,7 @@ export default function ProfilePage() {
   const [editTag, setEditTag] = useState('')
   const [editBio, setEditBio] = useState('')
   const [friendSearch, setFriendSearch] = useState('')
-  const [friendSearchResult, setFriendSearchResult] = useState(null)
+  const [friendSearchResults, setFriendSearchResults] = useState([])
   const [friendSearching, setFriendSearching] = useState(false)
   const [friendMsg, setFriendMsg] = useState('')
   const avatarRef = useRef(null)
@@ -87,14 +87,20 @@ export default function ProfilePage() {
     return m ? m[1] : String(Math.floor(1000 + Math.random() * 9000))
   }
 
-  const saveEditing = () => {
+  const saveEditing = async () => {
     // Enforce the tag format: Name#XXXX — the number part can't be removed
     let name = editTag.replace(/#\d*$/, '').trim()
     if (!name) name = 'Player'
     const number = getTagNumber(settings.profileTag)
     const finalTag = `${name}#${number}`
-    void updateSettings({ profileTag: finalTag, profileBio: editBio })
+    void updateSettings({ profileTag: finalTag })
     setEditing(false)
+    // Sync to Supabase
+    if (user?.id) {
+      try {
+        await supabase.from('profiles').update({ tag: finalTag }).eq('id', user.id)
+      } catch { /* ok */ }
+    }
   }
 
   const cancelEditing = () => setEditing(false)
@@ -104,9 +110,15 @@ export default function ProfilePage() {
     setEditingBio(true)
   }
 
-  const saveBio = () => {
+  const saveBio = async () => {
     void updateSettings({ profileBio: editBio })
     setEditingBio(false)
+    // Sync to Supabase
+    if (user?.id) {
+      try {
+        await supabase.from('profiles').update({ bio: editBio }).eq('id', user.id)
+      } catch { /* ok */ }
+    }
   }
 
   const pickAvatar = async (e) => {
@@ -124,53 +136,61 @@ export default function ProfilePage() {
   }
 
   const searchFriend = useCallback(async () => {
-    const tag = friendSearch.trim()
-    if (!tag || !tag.includes('#')) {
-      setFriendMsg('Enter a full tag like Player#1234')
-      return
-    }
-    // Prevent adding yourself
-    if (tag === settings.profileTag) {
-      setFriendMsg("You can't add yourself!")
-      setFriendSearchResult(null)
-      return
-    }
-    // Check if already a friend
-    if ((settings.friends || []).some((f) => f.tag === tag)) {
-      setFriendMsg('Already in your friends list')
-      setFriendSearchResult(null)
+    const q = friendSearch.trim()
+    if (!q) {
+      setFriendMsg('Enter a name, tag, or #number')
       return
     }
 
     setFriendSearching(true)
     setFriendMsg('')
-    setFriendSearchResult(null)
+    setFriendSearchResults([])
 
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, tag, bio, avatar_url')
-        .eq('tag', tag)
-        .single()
-      if (error || !data) {
-        setFriendMsg('No user found with that tag')
+      let query = supabase.from('profiles').select('id, tag, bio, avatar_url')
+
+      if (q.includes('#')) {
+        // Exact tag search: "Name#1234"
+        query = query.eq('tag', q)
+      } else if (q.startsWith('#')) {
+        // Number-only search: "#1234"
+        query = query.ilike('tag', `%${q}`)
       } else {
-        setFriendSearchResult(data)
+        // Partial name search: "hayden" → matches "hayden#1234", "Hayden#5678", etc.
+        query = query.ilike('tag', `${q}%`)
+      }
+
+      const { data, error } = await query.limit(20)
+
+      if (error) throw error
+
+      // Filter out yourself
+      const filtered = (data || []).filter((p) => p.id !== user?.id)
+
+      if (filtered.length === 0) {
+        setFriendMsg('No users found')
+      } else {
+        setFriendSearchResults(filtered)
       }
     } catch {
       setFriendMsg('Search failed — check your connection')
     }
     setFriendSearching(false)
-  }, [friendSearch, settings.profileTag, settings.friends])
+  }, [friendSearch, user?.id])
 
-  const confirmAddFriend = useCallback(() => {
-    if (!friendSearchResult) return
+  const confirmAddFriend = useCallback((result) => {
+    if (!result) return
+    // Check if already a friend
+    if ((settings.friends || []).some((f) => f.tag === result.tag)) {
+      setFriendMsg('Already in your friends list')
+      return
+    }
     const next = [
       ...(settings.friends || []),
       {
-        id: friendSearchResult.id,
-        name: (friendSearchResult.tag || '').split('#')[0],
-        tag: friendSearchResult.tag,
+        id: result.id,
+        name: (result.tag || '').split('#')[0],
+        tag: result.tag,
         status: 'online',
         activity: 'Online',
         section: 'online',
@@ -178,10 +198,10 @@ export default function ProfilePage() {
     ]
     void updateSettings({ friends: next })
     setFriendSearch('')
-    setFriendSearchResult(null)
+    setFriendSearchResults([])
     setFriendMsg('Friend added!')
     setTimeout(() => setFriendMsg(''), 3000)
-  }, [friendSearchResult, settings.friends, updateSettings])
+  }, [settings.friends, updateSettings])
 
   return (
     <div className="stellar-page">
@@ -421,12 +441,12 @@ export default function ProfilePage() {
       {tab === 'add' && (
         <div className="stellar-setting-block">
           <p className="stellar-page-lead">
-            Search for a user by their full tag (e.g. <strong style={{ color: 'var(--text)' }}>Player#1234</strong>)
+            Search by name, full tag, or #number
           </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <input
               className="stellar-input"
-              placeholder="Name#0000"
+              placeholder="Name, Name#0000, or #0000"
               value={friendSearch}
               onChange={(e) => setFriendSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && searchFriend()}
@@ -446,37 +466,41 @@ export default function ProfilePage() {
               {friendMsg}
             </p>
           )}
-          {friendSearchResult && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '12px 16px',
-              borderRadius: 12,
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: 'linear-gradient(145deg, var(--accent), #c026d3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
-              }}>
-                {(friendSearchResult.tag || '?')[0].toUpperCase()}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{friendSearchResult.tag}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  {friendSearchResult.bio || 'No bio'}
+          {friendSearchResults.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {friendSearchResults.map((r) => (
+                <div key={r.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'linear-gradient(145deg, var(--accent), #c026d3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0,
+                  }}>
+                    {(r.tag || '?')[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{r.tag}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.bio || 'No bio'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="stellar-btn stellar-btn--primary stellar-btn--sm"
+                    onClick={() => confirmAddFriend(r)}
+                  >
+                    Add
+                  </button>
                 </div>
-              </div>
-              <button
-                type="button"
-                className="stellar-btn stellar-btn--primary stellar-btn--sm"
-                onClick={confirmAddFriend}
-              >
-                Add Friend
-              </button>
+              ))}
             </div>
           )}
         </div>
