@@ -38,7 +38,7 @@ function StatCard({ icon: Icon, value, label, sublabel }) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { simulateClip } = useStellar()
+  const { settings, simulateClip } = useStellar()
   const { user } = useAuth()
 
   const clips = useMemo(() => getLocalClips(), [])
