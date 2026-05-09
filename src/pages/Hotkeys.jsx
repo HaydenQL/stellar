@@ -1,84 +1,121 @@
-import { useState } from "react";
-import { Keyboard, Plus, Trash2, RotateCcw, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import SectionHeader from "@/components/ui/SectionHeader";
-import HotkeyRecorder from "@/components/hotkeys/HotkeyRecorder";
+import { useState } from 'react'
+import { useStellar } from '@/contexts/SettingsContext.jsx'
+import { HelpTip } from '@/components/ui/HelpTip.jsx'
+import { HotkeyPickerModal } from '@/components/ui/HotkeyPickerModal.jsx'
+import { IconKeyboard } from '@/components/ui/Icons.jsx'
 
 const defaultBindings = [
-  { id: 1, action: "Save Clip", keys: ["F9"], description: "Save the last replay buffer as a clip" },
-  { id: 2, action: "Start/Stop Recording", keys: ["Ctrl", "F9"], description: "Toggle continuous recording" },
-  { id: 3, action: "Screenshot", keys: ["F10"], description: "Take a screenshot of the current frame" },
-  { id: 4, action: "Toggle Overlay", keys: ["Ctrl", "Shift", "O"], description: "Show or hide the Stellar overlay" },
-  { id: 5, action: "Bookmark Moment", keys: ["F8"], description: "Mark a timestamp in the recording" },
-];
+  { id: 'saveClip', action: 'Save Clip', description: 'Save the last replay buffer as a clip' },
+  { id: 'toggleRecord', action: 'Start/Stop Recording', description: 'Toggle continuous recording' },
+  { id: 'screenshot', action: 'Screenshot', description: 'Take a screenshot of the current frame' },
+  { id: 'toggleOverlay', action: 'Toggle Overlay', description: 'Show or hide the Stellar overlay' },
+  { id: 'bookmark', action: 'Bookmark Moment', description: 'Mark a timestamp in the recording' },
+]
 
 export default function Hotkeys() {
-  const [bindings, setBindings] = useState(defaultBindings);
-  const [editingId, setEditingId] = useState(null);
+  const { settings, updateSettings } = useStellar()
+  const [editingId, setEditingId] = useState(null)
 
-  const handleUpdateKeys = (id, newKeys) => {
-    setBindings(prev => prev.map(b => b.id === id ? { ...b, keys: newKeys } : b));
-    setEditingId(null);
-  };
+  const hotkeys = settings.hotkeys || {
+    saveClip: 'F9',
+    toggleRecord: 'Ctrl+F9',
+    screenshot: 'F10',
+    toggleOverlay: 'Ctrl+Shift+O',
+    bookmark: 'F8',
+  }
+
+  const getKeys = (id) => (hotkeys[id] || '').split('+')
+
+  const handleSave = (id, combo) => {
+    const next = { ...hotkeys, [id]: combo }
+    void updateSettings({ hotkeys: next })
+    setEditingId(null)
+  }
+
+  const resetAll = () => {
+    void updateSettings({
+      hotkeys: {
+        saveClip: 'F9',
+        toggleRecord: 'Ctrl+F9',
+        screenshot: 'F10',
+        toggleOverlay: 'Ctrl+Shift+O',
+        bookmark: 'F8',
+      },
+    })
+  }
 
   return (
-    <div className="space-y-8 pb-20 lg:pb-0">
-      <SectionHeader
-        title="Hotkeys"
-        description="Customize your keybindings. Click on a binding to change it — supports single keys and combos."
-      />
+    <div className="stellar-page">
+      <h1 className="stellar-page-title">Hotkeys</h1>
+      <p className="stellar-page-lead">
+        Customize your keybindings. Click on a binding to change it — supports single keys and combos.
+      </p>
 
-      <div className="bg-card rounded-2xl border border-border overflow-hidden">
-        <div className="p-5 border-b border-border/50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Keyboard className="w-4 h-4 text-muted-foreground" />
-            <h3 className="font-display font-semibold text-foreground">Keybindings</h3>
-          </div>
-          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground gap-1.5">
-            <RotateCcw className="w-3.5 h-3.5" /> Reset All
-          </Button>
+      <div className="stellar-setting-block">
+        <div className="stellar-setting-block-head">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <IconKeyboard width={16} height={16} /> KEYBINDINGS
+          </span>
+          <button
+            type="button"
+            className="stellar-btn stellar-btn--ghost stellar-btn--sm"
+            onClick={resetAll}
+            style={{ fontSize: 12 }}
+          >
+            ↺ Reset All
+          </button>
         </div>
-        <div className="divide-y divide-border/50">
-          {bindings.map((binding) => (
-            <div key={binding.id} className="flex items-center gap-4 p-5 hover:bg-secondary/20 transition-colors">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{binding.action}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{binding.description}</p>
+
+        {defaultBindings.map((b) => (
+          <div key={b.id} className="stellar-settings-row">
+            <div className="stellar-settings-row-body">
+              <div className="stellar-settings-row-label">{b.action}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 2 }}>
+                {b.description}
               </div>
-
-              {editingId === binding.id ? (
-                <HotkeyRecorder
-                  onRecord={(keys) => handleUpdateKeys(binding.id, keys)}
-                  onCancel={() => setEditingId(null)}
-                />
-              ) : (
-                <button
-                  onClick={() => setEditingId(binding.id)}
-                  className="flex items-center gap-1.5 group"
-                >
-                  {binding.keys.map((key, i) => (
-                    <span key={i} className="flex items-center gap-1.5">
-                      {i > 0 && <span className="text-xs text-muted-foreground">+</span>}
-                      <kbd className="px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-xs font-mono font-medium text-foreground group-hover:border-primary/30 transition-colors min-w-[2rem] text-center">
-                        {key}
-                      </kbd>
-                    </span>
-                  ))}
-                  <Pencil className="w-3 h-3 text-muted-foreground/40 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              )}
             </div>
-          ))}
-        </div>
+            <button
+              type="button"
+              className="stellar-hotkey-btn"
+              onClick={() => setEditingId(b.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              {getKeys(b.id).map((key, i) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {i > 0 && <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>+</span>}
+                  <kbd>{key}</kbd>
+                </span>
+              ))}
+            </button>
+          </div>
+        ))}
       </div>
 
-      <div className="p-4 rounded-xl bg-secondary/30 border border-border">
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Tip:</span> You can use single keys like F9 or key combos like Ctrl + Shift + F9. 
+      <div
+        className="stellar-setting-block"
+        style={{ padding: '14px 18px', borderRadius: 12 }}
+      >
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+          <strong style={{ color: 'var(--text)' }}>Tip:</strong> You can use single keys like F9 or key combos like Ctrl + Shift + F9.
           Click on any binding above to reassign it.
         </p>
       </div>
+
+      <HotkeyPickerModal
+        open={editingId !== null}
+        title={`Change ${defaultBindings.find((b) => b.id === editingId)?.action || 'hotkey'}`}
+        initialValue={editingId ? (hotkeys[editingId] || '') : ''}
+        onClose={() => setEditingId(null)}
+        onSave={(combo) => editingId && handleSave(editingId, combo)}
+      />
     </div>
-  );
+  )
 }

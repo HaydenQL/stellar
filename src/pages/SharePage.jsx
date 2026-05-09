@@ -143,15 +143,28 @@ export default function SharePage() {
 
         <div className="share-actions">
           {clip.file_url && (
-            <a
-              href={clip.file_url}
-              download
+            <button
+              type="button"
               className="stellar-btn stellar-btn--primary"
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={async () => {
+                try {
+                  const res = await fetch(clip.file_url)
+                  const blob = await res.blob()
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${clip.title || 'clip'}.mp4`
+                  document.body.appendChild(a)
+                  a.click()
+                  a.remove()
+                  URL.revokeObjectURL(url)
+                } catch {
+                  window.open(clip.file_url, '_blank')
+                }
+              }}
             >
               Download Clip
-            </a>
+            </button>
           )}
           <button
             type="button"

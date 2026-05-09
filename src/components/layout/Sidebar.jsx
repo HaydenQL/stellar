@@ -16,11 +16,12 @@ import {
   IconStarLogo,
 } from '@/components/ui/Icons.jsx'
 
-const primary = [
+const primaryBase = [
   { to: '/', icon: IconHome, labelKey: 'nav.dashboard', end: true },
   { to: '/clips', icon: IconFilm, labelKey: 'nav.clips' },
-  { to: '/discover', icon: IconCompass, labelKey: 'nav.discover' },
 ]
+
+const discoverItem = { to: '/discover', icon: IconCompass, labelKey: 'nav.discover' }
 
 const recording = [
   { to: '/capture', icon: IconMonitor, labelKey: 'nav.capture' },
@@ -76,7 +77,7 @@ export function Sidebar() {
       </div>
 
       <div className="stellar-nav-scroll">
-        {primary.map((item) => (
+        {[...primaryBase, ...(settings.onlineModeEnabled !== false ? [discoverItem] : [])].map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

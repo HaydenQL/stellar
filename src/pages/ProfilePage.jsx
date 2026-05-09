@@ -73,8 +73,19 @@ export default function ProfilePage() {
     setEditing(true)
   }
 
+  // Extract the #XXXX number from a tag string
+  const getTagNumber = (tag) => {
+    const m = (tag || '').match(/#(\d+)$/)
+    return m ? m[1] : String(Math.floor(1000 + Math.random() * 9000))
+  }
+
   const saveEditing = () => {
-    void updateSettings({ profileTag: editTag, profileBio: editBio })
+    // Enforce the tag format: Name#XXXX — the number part can't be removed
+    let name = editTag.replace(/#\d*$/, '').trim()
+    if (!name) name = 'Player'
+    const number = getTagNumber(settings.profileTag)
+    const finalTag = `${name}#${number}`
+    void updateSettings({ profileTag: finalTag, profileBio: editBio })
     setEditing(false)
   }
 
@@ -309,19 +320,14 @@ export default function ProfilePage() {
       {tab === 'requests' && (
         <div className="stellar-setting-block">
           <p className="stellar-page-lead">
-            Friend requests will appear here when you connect Stellar online.
+            Friend requests will appear here when someone adds your tag.
+            Share your tag <strong style={{ color: 'var(--text)' }}>{settings.profileTag}</strong> with friends so they can find you.
           </p>
-          <div className="stellar-panel">
-            <div className="stellar-clip-row">
-              <div className="stellar-clip-meta">
-                <div className="stellar-clip-title">Demo request</div>
-                <div className="stellar-clip-sub">ClipFan#9921 wants to connect</div>
-              </div>
-              <button type="button" className="stellar-btn stellar-btn--primary">
-                Accept
-              </button>
+          {(settings.friendRequestCount || 0) === 0 && (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-faint)' }}>
+              No pending requests
             </div>
-          </div>
+          )}
         </div>
       )}
 

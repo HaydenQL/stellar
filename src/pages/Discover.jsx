@@ -15,7 +15,25 @@ import {
   IconGamepad,
 } from '@/components/ui/Icons.jsx'
 
-function DiscoverClipCard({ clip }) {
+/** Fullscreen video overlay — stays on the same page */
+function VideoLightbox({ src, onClose }) {
+  if (!src) return null
+  return (
+    <div className="video-lightbox" onClick={onClose}>
+      <video
+        src={src}
+        controls
+        autoPlay
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button type="button" className="video-lightbox-close" onClick={onClose}>
+        ✕
+      </button>
+    </div>
+  )
+}
+
+function DiscoverClipCard({ clip, onOpenVideo }) {
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(clip.likes || 0)
 
@@ -41,13 +59,25 @@ function DiscoverClipCard({ clip }) {
     <div className="discover-card">
       <div
         className="discover-thumb"
-        style={{ background: clip.gradient || 'linear-gradient(135deg, rgba(124,93,250,0.35), rgba(75,157,255,0.25))' }}
+        style={{
+          background: clip.gradient || 'linear-gradient(135deg, rgba(124,93,250,0.35), rgba(75,157,255,0.25))',
+          cursor: clip.fileUrl ? 'pointer' : 'default',
+        }}
+        onClick={() => clip.fileUrl && onOpenVideo?.(clip.fileUrl)}
+        title={clip.fileUrl ? 'Click to preview fullscreen' : ''}
       >
         {clip.fileUrl ? (
           <video src={clip.fileUrl} className="clip-card-video-preview" muted preload="metadata" />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <IconPlay width={28} height={28} style={{ opacity: 0.6 }} />
+          </div>
+        )}
+        {clip.fileUrl && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s' }}
+            className="discover-thumb-play-overlay"
+          >
+            <IconPlay width={36} height={36} />
           </div>
         )}
         <span className="clip-card-dur">{clip.duration}</span>
@@ -94,6 +124,7 @@ export default function Discover() {
   const [tab, setTab] = useState('trending')
   const [clips, setClips] = useState([])
   const [loading, setLoading] = useState(true)
+  const [lightboxSrc, setLightboxSrc] = useState(null)
 
   useEffect(() => {
     ;(async () => {
@@ -176,7 +207,7 @@ export default function Discover() {
       ) : activeClips.length > 0 ? (
         <div className="discover-grid">
           {activeClips.map((c) => (
-            <DiscoverClipCard key={c.id} clip={c} />
+            <DiscoverClipCard key={c.id} clip={c} onOpenVideo={setLightboxSrc} />
           ))}
         </div>
       ) : (
@@ -195,6 +226,8 @@ export default function Discover() {
           </button>
         </div>
       )}
+
+      <VideoLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
     </div>
   )
 }

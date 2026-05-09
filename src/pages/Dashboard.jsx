@@ -47,7 +47,8 @@ export default function Dashboard() {
   const publicCount = clips.filter((c) => c.visibility === 'public').length
   const recentClips = clips.slice(0, 5)
 
-  const greeting = user?.email?.split('@')[0] || 'Player'
+  const tagName = (settings.profileTag || '').split('#')[0]
+  const greeting = tagName || user?.email?.split('@')[0] || 'Player'
 
   return (
     <div className="stellar-page">

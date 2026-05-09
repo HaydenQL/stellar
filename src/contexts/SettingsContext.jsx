@@ -12,9 +12,29 @@ import { translate } from '@/lib/i18n'
 import { playClipSound } from '@/lib/playClipSound'
 
 const StellarContext = createContext(null)
+const LS_KEY = 'stellar_settings'
+
+/** Read settings from localStorage (web) or fall back to defaults */
+function loadSavedSettings() {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (raw) {
+      const saved = JSON.parse(raw)
+      return { ...defaultSettings, ...saved }
+    }
+  } catch { /* ignore */ }
+  return { ...defaultSettings }
+}
+
+/** Persist settings to localStorage (web fallback for when Electron IPC isn't available) */
+function persistSettings(s) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(s))
+  } catch { /* quota exceeded, etc. */ }
+}
 
 export function StellarProvider({ children }) {
-  const [settings, setSettingsState] = useState(defaultSettings)
+  const [settings, setSettingsState] = useState(loadSavedSettings)
   const [hydrated, setHydrated] = useState(false)
   const [currentGame, setCurrentGame] = useState({
     label: '',
@@ -49,7 +69,11 @@ export function StellarProvider({ children }) {
       try {
         const s = await window.stellar?.getSettings?.()
         if (!cancelled && s && typeof s === 'object') {
-          setSettingsState((prev) => ({ ...prev, ...s }))
+          setSettingsState((prev) => {
+            const merged = { ...prev, ...s }
+            persistSettings(merged)
+            return merged
+          })
         }
       } catch {
         /* no electron in plain browser */
@@ -73,11 +97,19 @@ export function StellarProvider({ children }) {
 
   const updateSettings = useCallback(async (patch) => {
     if (!patch || typeof patch !== 'object') return
-    setSettingsState((prev) => ({ ...prev, ...patch }))
+    setSettingsState((prev) => {
+      const next = { ...prev, ...patch }
+      persistSettings(next)
+      return next
+    })
     try {
       const next = await window.stellar?.setSettings?.(patch)
       if (next && typeof next === 'object') {
-        setSettingsState((prev) => ({ ...prev, ...next }))
+        setSettingsState((prev) => {
+          const merged = { ...prev, ...next }
+          persistSettings(merged)
+          return merged
+        })
       }
     } catch {
       /* IPC unavailable */
@@ -115,7 +147,11 @@ export function StellarProvider({ children }) {
     const off =
       window.stellar?.onSettingsPatch?.((patch) => {
         if (patch && typeof patch === 'object') {
-          setSettingsState((prev) => ({ ...prev, ...patch }))
+          setSettingsState((prev) => {
+            const next = { ...prev, ...patch }
+            persistSettings(next)
+            return next
+          })
         }
       }) ?? (() => {})
     return off
