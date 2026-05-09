@@ -5,7 +5,8 @@
   "type": "module",
   "main": "electron/main.cjs",
   "description": "Stellar — simple Windows clip companion (Medal-inspired)",
-  "author": "",
+  "author": "HaydenQL",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -64,7 +65,9 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   }
 }
