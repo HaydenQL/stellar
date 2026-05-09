@@ -17,11 +17,109 @@ import {
   IconGrid,
   IconListMenu,
   IconLock,
+  IconPlay,
   IconSearch,
   IconGlobe,
   IconShare,
   IconUpload,
 } from '@/components/ui/Icons.jsx'
+
+/** Rich clip detail modal — video + info panel */
+function ClipDetailModal({ clip, onClose, onShare, onToggleVis, onDelete }) {
+  if (!clip) return null
+
+  const handleDownload = async () => {
+    if (!clip.fileUrl) return
+    try {
+      const res = await fetch(clip.fileUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${clip.title || 'clip'}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(clip.fileUrl, '_blank')
+    }
+  }
+
+  const handleCopyLink = async () => {
+    const url = getShareUrl(clip.shareId || clip.id)
+    try { await navigator.clipboard.writeText(url) } catch { /* */ }
+  }
+
+  return (
+    <div className="clip-detail-overlay" onClick={onClose}>
+      <div className="clip-detail-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Video side */}
+        <div className="clip-detail-video-wrap">
+          {clip.fileUrl ? (
+            <video src={clip.fileUrl} controls autoPlay className="clip-detail-video" />
+          ) : (
+            <div className="clip-detail-video-placeholder" style={{ background: clip.gradient || 'var(--elevated)' }}>
+              <IconPlay width={48} height={48} style={{ opacity: 0.4 }} />
+            </div>
+          )}
+        </div>
+
+        {/* Details panel */}
+        <div className="clip-detail-panel">
+          <div className="clip-detail-panel-head">
+            <h2 className="clip-detail-title">{clip.title}</h2>
+            <button type="button" className="clip-detail-close" onClick={onClose}>✕</button>
+          </div>
+
+          <div className="clip-detail-meta">
+            <span><IconGamepad width={14} height={14} /> {clip.game}</span>
+            <span>·</span>
+            <span>{clip.duration}</span>
+            <span>·</span>
+            <span>{clip.size}</span>
+          </div>
+
+          <div className="clip-detail-meta" style={{ marginTop: 4 }}>
+            <span style={{ opacity: 0.5 }}>{timeAgo(clip.createdAt)}</span>
+          </div>
+
+          <div className="clip-detail-divider" />
+
+          {/* Visibility */}
+          <div className="clip-detail-row">
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Visibility</span>
+            <button
+              type="button"
+              className={`stellar-btn stellar-btn--sm ${clip.visibility === 'public' ? 'stellar-btn--primary' : 'stellar-btn--ghost'}`}
+              onClick={() => onToggleVis?.(clip.id, clip.visibility)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              {clip.visibility === 'public' ? <><IconGlobe width={12} height={12} /> Public</> : <><IconLock width={12} height={12} /> Private</>}
+            </button>
+          </div>
+
+          <div className="clip-detail-divider" />
+
+          {/* Actions */}
+          <div className="clip-detail-actions">
+            <button type="button" className="stellar-btn stellar-btn--ghost" onClick={() => onShare?.(clip)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <IconShare width={14} height={14} /> Copy Link
+            </button>
+            {clip.fileUrl && (
+              <button type="button" className="stellar-btn stellar-btn--ghost" onClick={handleDownload} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <IconUpload width={14} height={14} style={{ transform: 'rotate(180deg)' }} /> Download
+              </button>
+            )}
+            <button type="button" className="stellar-btn stellar-btn--ghost" style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => { onDelete?.(clip.id); onClose() }}>
+              ✕ Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function MyClips() {
   const { t, settings } = useStellar()
@@ -34,6 +132,7 @@ export default function MyClips() {
   const [clips, setClips] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [selectedClip, setSelectedClip] = useState(null)
 
   // Load clips
   const loadClips = useCallback(async () => {
@@ -241,15 +340,25 @@ export default function MyClips() {
             <article key={c.id} className="clip-card">
               <div
                 className="clip-card-thumb"
-                style={{ background: c.gradient || 'var(--elevated)' }}
+                style={{
+                  background: c.gradient || 'var(--elevated)',
+                  cursor: c.fileUrl ? 'pointer' : 'default',
+                }}
+                onClick={() => setSelectedClip(c)}
+                title={c.fileUrl ? 'Click to preview fullscreen' : ''}
               >
                 {c.fileUrl && (
                   <video src={c.fileUrl} className="clip-card-video-preview" muted preload="metadata" />
                 )}
+                {c.fileUrl && (
+                  <div className="discover-thumb-play-overlay" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s' }}>
+                    <IconPlay width={32} height={32} />
+                  </div>
+                )}
                 <button
                   type="button"
                   className={`clip-card-badge clip-card-badge--${c.visibility === 'public' ? 'public' : 'private'}`}
-                  onClick={() => toggleVisibility(c.id, c.visibility)}
+                  onClick={(e) => { e.stopPropagation(); toggleVisibility(c.id, c.visibility) }}
                   title={`Click to make ${c.visibility === 'public' ? 'private' : 'public'}`}
                   style={{ cursor: 'pointer', border: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 >
@@ -344,6 +453,14 @@ export default function MyClips() {
           ))}
         </div>
       )}
+
+      <ClipDetailModal
+        clip={selectedClip}
+        onClose={() => setSelectedClip(null)}
+        onShare={shareClip}
+        onToggleVis={toggleVisibility}
+        onDelete={deleteClip}
+      />
     </div>
   )
 }

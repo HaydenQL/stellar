@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStellar } from '@/contexts/SettingsContext.jsx'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabaseClient'
 import {
   IconCamera,
   IconClock,
@@ -51,8 +52,13 @@ export default function ProfilePage() {
   const { user, signOut } = useAuth()
   const [tab, setTab] = useState('friends')
   const [editing, setEditing] = useState(false)
+  const [editingBio, setEditingBio] = useState(false)
   const [editTag, setEditTag] = useState('')
   const [editBio, setEditBio] = useState('')
+  const [friendSearch, setFriendSearch] = useState('')
+  const [friendSearchResult, setFriendSearchResult] = useState(null)
+  const [friendSearching, setFriendSearching] = useState(false)
+  const [friendMsg, setFriendMsg] = useState('')
   const avatarRef = useRef(null)
   const bannerRef = useRef(null)
 
@@ -68,7 +74,9 @@ export default function ProfilePage() {
   )
 
   const startEditing = () => {
-    setEditTag(settings.profileTag || '')
+    // Only show the name part for editing — the #XXXX is read-only
+    const namePart = (settings.profileTag || '').replace(/#\d*$/, '').trim()
+    setEditTag(namePart || 'Player')
     setEditBio(settings.profileBio || '')
     setEditing(true)
   }
@@ -91,6 +99,16 @@ export default function ProfilePage() {
 
   const cancelEditing = () => setEditing(false)
 
+  const startEditingBio = () => {
+    setEditBio(settings.profileBio || '')
+    setEditingBio(true)
+  }
+
+  const saveBio = () => {
+    void updateSettings({ profileBio: editBio })
+    setEditingBio(false)
+  }
+
   const pickAvatar = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -105,23 +123,65 @@ export default function ProfilePage() {
     void updateSettings({ profileBanner: dataUrl })
   }
 
-  const addFriend = useCallback(() => {
-    const name = window.prompt('Friend display name')
-    if (!name) return
-    const tag = window.prompt('Tag (e.g. Name#0000)', `${name}#0000`)
+  const searchFriend = useCallback(async () => {
+    const tag = friendSearch.trim()
+    if (!tag || !tag.includes('#')) {
+      setFriendMsg('Enter a full tag like Player#1234')
+      return
+    }
+    // Prevent adding yourself
+    if (tag === settings.profileTag) {
+      setFriendMsg("You can't add yourself!")
+      setFriendSearchResult(null)
+      return
+    }
+    // Check if already a friend
+    if ((settings.friends || []).some((f) => f.tag === tag)) {
+      setFriendMsg('Already in your friends list')
+      setFriendSearchResult(null)
+      return
+    }
+
+    setFriendSearching(true)
+    setFriendMsg('')
+    setFriendSearchResult(null)
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, tag, bio, avatar_url')
+        .eq('tag', tag)
+        .single()
+      if (error || !data) {
+        setFriendMsg('No user found with that tag')
+      } else {
+        setFriendSearchResult(data)
+      }
+    } catch {
+      setFriendMsg('Search failed — check your connection')
+    }
+    setFriendSearching(false)
+  }, [friendSearch, settings.profileTag, settings.friends])
+
+  const confirmAddFriend = useCallback(() => {
+    if (!friendSearchResult) return
     const next = [
       ...(settings.friends || []),
       {
-        id: String(Date.now()),
-        name,
-        tag: tag || `${name}#0000`,
+        id: friendSearchResult.id,
+        name: (friendSearchResult.tag || '').split('#')[0],
+        tag: friendSearchResult.tag,
         status: 'online',
         activity: 'Online',
         section: 'online',
       },
     ]
     void updateSettings({ friends: next })
-  }, [settings.friends, updateSettings])
+    setFriendSearch('')
+    setFriendSearchResult(null)
+    setFriendMsg('Friend added!')
+    setTimeout(() => setFriendMsg(''), 3000)
+  }, [friendSearchResult, settings.friends, updateSettings])
 
   return (
     <div className="stellar-page">
@@ -175,54 +235,81 @@ export default function ProfilePage() {
             style={{ display: 'none' }}
             onChange={pickAvatar}
           />
+        </div>
 
-          <div style={{ flex: 1, paddingBottom: 4 }}>
-            {editing ? (
-              <div className="profile-edit-form">
+        {/* Name & Bio — sits below avatar in the card body */}
+        <div style={{ padding: '8px 0 4px' }}>
+          {editing ? (
+            <div className="profile-edit-form">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
                 <input
                   className="stellar-input"
                   value={editTag}
                   onChange={(e) => setEditTag(e.target.value)}
-                  placeholder="YourTag#0001"
-                  style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}
+                  placeholder="Your display name"
+                  style={{ fontSize: 18, fontWeight: 700, flex: 1 }}
                 />
-                <input
-                  className="stellar-input"
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  placeholder="Your bio…"
-                  style={{ fontSize: 14 }}
-                />
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button type="button" className="stellar-btn stellar-btn--primary stellar-btn--sm" onClick={saveEditing}>
-                    Save
-                  </button>
-                  <button type="button" className="stellar-btn stellar-btn--ghost stellar-btn--sm" onClick={cancelEditing}>
-                    Cancel
-                  </button>
-                </div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                  #{getTagNumber(settings.profileTag)}
+                </span>
               </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <h1 className="stellar-page-title" style={{ margin: '4px 0 6px' }}>
-                    {settings.profileTag}
-                  </h1>
-                  <button
-                    type="button"
-                    className="profile-edit-pencil"
-                    title="Edit profile"
-                    onClick={startEditing}
-                  >
-                    <IconPencil />
-                  </button>
-                </div>
-                <p className="stellar-page-lead" style={{ margin: 0 }}>
-                  {settings.profileBio || 'Just here to clip the impossible.'}
-                </p>
-              </>
-            )}
-          </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                <button type="button" className="stellar-btn stellar-btn--primary stellar-btn--sm" onClick={saveEditing}>
+                  Save
+                </button>
+                <button type="button" className="stellar-btn stellar-btn--ghost stellar-btn--sm" onClick={cancelEditing}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h1 className="stellar-page-title" style={{ margin: 0 }}>
+                {settings.profileTag}
+              </h1>
+              <button
+                type="button"
+                className="profile-edit-pencil"
+                title="Edit display name"
+                onClick={startEditing}
+              >
+                <IconPencil />
+              </button>
+            </div>
+          )}
+
+          {editingBio ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <input
+                className="stellar-input"
+                value={editBio}
+                onChange={(e) => setEditBio(e.target.value)}
+                placeholder="Your bio…"
+                style={{ fontSize: 14, flex: 1 }}
+              />
+              <button type="button" className="stellar-btn stellar-btn--primary stellar-btn--sm" onClick={saveBio}>
+                Save
+              </button>
+              <button type="button" className="stellar-btn stellar-btn--ghost stellar-btn--sm" onClick={() => setEditingBio(false)}>
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <p className="stellar-page-lead" style={{ margin: 0 }}>
+                {settings.profileBio || 'Just here to clip the impossible.'}
+              </p>
+              <button
+                type="button"
+                className="profile-edit-pencil"
+                title="Edit bio"
+                onClick={startEditingBio}
+                style={{ width: 22, height: 22 }}
+              >
+                <IconPencil />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -333,10 +420,65 @@ export default function ProfilePage() {
 
       {tab === 'add' && (
         <div className="stellar-setting-block">
-          <p className="stellar-page-lead">Add someone by tag. They are stored on this PC.</p>
-          <button type="button" className="stellar-btn stellar-btn--primary" onClick={addFriend}>
-            Add friend
-          </button>
+          <p className="stellar-page-lead">
+            Search for a user by their full tag (e.g. <strong style={{ color: 'var(--text)' }}>Player#1234</strong>)
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input
+              className="stellar-input"
+              placeholder="Name#0000"
+              value={friendSearch}
+              onChange={(e) => setFriendSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && searchFriend()}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button
+              type="button"
+              className="stellar-btn stellar-btn--primary"
+              onClick={searchFriend}
+              disabled={friendSearching}
+            >
+              {friendSearching ? 'Searching…' : 'Search'}
+            </button>
+          </div>
+          {friendMsg && (
+            <p style={{ fontSize: 13, color: friendMsg.includes('added') ? '#4ade80' : 'var(--text-muted)', margin: '0 0 10px' }}>
+              {friendMsg}
+            </p>
+          )}
+          {friendSearchResult && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '12px 16px',
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%',
+                background: 'linear-gradient(145deg, var(--accent), #c026d3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
+              }}>
+                {(friendSearchResult.tag || '?')[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{friendSearchResult.tag}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {friendSearchResult.bio || 'No bio'}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="stellar-btn stellar-btn--primary stellar-btn--sm"
+                onClick={confirmAddFriend}
+              >
+                Add Friend
+              </button>
+            </div>
+          )}
         </div>
       )}
 

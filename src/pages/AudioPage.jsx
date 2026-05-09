@@ -83,7 +83,11 @@ export default function AudioPage() {
         {sources.map((s) => {
           const Ic = ICONS[s.id] || IconAudio
           return (
-            <div key={s.id} className="audio-source-row">
+            <div
+              key={s.id}
+              className="audio-source-row"
+              style={{ opacity: s.enabled ? 1 : 0.4, transition: 'opacity 0.2s' }}
+            >
               <Ic width={20} height={20} style={{ opacity: 0.85 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -116,9 +120,19 @@ export default function AudioPage() {
                 min={0}
                 max={100}
                 disabled={!s.enabled}
-                value={s.volume}
+                value={s.enabled ? s.volume : 0}
                 onChange={(e) => patchSource(s.id, { volume: Number(e.target.value) })}
+                style={{ maxWidth: 140 }}
               />
+              <span style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: s.enabled ? 'var(--accent)' : 'var(--text-faint)',
+                minWidth: 36,
+                textAlign: 'right',
+              }}>
+                {s.enabled ? `${s.volume}%` : 'Off'}
+              </span>
               <button
                 type="button"
                 className={`stellar-toggle${s.enabled ? ' stellar-toggle--on' : ''}`}

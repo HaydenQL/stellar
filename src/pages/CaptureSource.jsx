@@ -177,15 +177,17 @@ export default function CaptureSource() {
             Bitrate (Mbps)
             <HelpTip text="Higher bitrate means sharper video and larger files." />
           </div>
-          <input
-            className="stellar-input"
-            type="range"
-            min={5}
-            max={50}
-            value={settings.bitrateMbps ?? 15}
-            onChange={(e) => void updateSettings({ bitrateMbps: Number(e.target.value) })}
-          />
-          <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{settings.bitrateMbps ?? 15}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="range"
+              min={5}
+              max={50}
+              value={settings.bitrateMbps ?? 15}
+              onChange={(e) => void updateSettings({ bitrateMbps: Number(e.target.value) })}
+              style={{ width: 140 }}
+            />
+            <span style={{ fontWeight: 700, color: 'var(--accent)', minWidth: 60, textAlign: 'right', whiteSpace: 'nowrap' }}>{settings.bitrateMbps ?? 15} Mbps</span>
+          </div>
         </div>
         <div className="stellar-field">
           <div className="stellar-field-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

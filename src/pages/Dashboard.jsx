@@ -1,11 +1,9 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStellar } from '@/contexts/SettingsContext.jsx'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  getLocalClips,
-  getClipCount,
-  getTotalDurationSeconds,
+  fetchMyClips,
   formatDuration,
   timeAgo,
 } from '@/lib/clipStore'
@@ -40,12 +38,26 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { settings, simulateClip } = useStellar()
   const { user } = useAuth()
+  const [clips, setClips] = useState([])
 
-  const clips = useMemo(() => getLocalClips(), [])
-  const clipCount = getClipCount()
-  const totalDur = formatDuration(getTotalDurationSeconds())
+  useEffect(() => {
+    fetchMyClips(user?.id).then(setClips)
+  }, [user?.id])
+
+  const clipCount = clips.length
   const publicCount = clips.filter((c) => c.visibility === 'public').length
   const recentClips = clips.slice(0, 5)
+
+  // Calculate total duration from clip data
+  const totalDur = useMemo(() => {
+    let totalSecs = 0
+    for (const c of clips) {
+      const parts = (c.duration || '0:00').split(':').map(Number)
+      if (parts.length === 2) totalSecs += parts[0] * 60 + parts[1]
+      else if (parts.length === 3) totalSecs += parts[0] * 3600 + parts[1] * 60 + parts[2]
+    }
+    return formatDuration(totalSecs)
+  }, [clips])
 
   const tagName = (settings.profileTag || '').split('#')[0]
   const greeting = tagName || user?.email?.split('@')[0] || 'Player'
