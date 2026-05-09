@@ -18,4 +18,25 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  // Exclude Electron-only native packages from the browser build
+  optimizeDeps: {
+    exclude: [
+      'electron',
+      'electron-store',
+      'active-win',
+      'discord-rpc',
+      'systeminformation',
+    ],
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        'electron',
+        'electron-store',
+        'active-win',
+        'discord-rpc',
+        'systeminformation',
+      ],
+    },
+  },
 })

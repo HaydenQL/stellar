@@ -3,8 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "electron/main.cjs",
-  "description": "Stellar — simple Windows clip companion (Medal-inspired)",
+  "description": "Stellar — lightweight game clipping engine",
   "author": "HaydenQL",
   "license": "MIT",
   "scripts": {
@@ -18,15 +17,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
-    "active-win": "^7.7.2",
     "clsx": "^2.1.1",
-    "discord-rpc": "^4.0.1",
-    "electron-store": "^8.2.0",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.15.0",
-    "systeminformation": "^5.31.6",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -44,9 +39,16 @@
     "vite": "^8.0.10",
     "wait-on": "^8.0.5"
   },
+  "optionalDependencies": {
+    "active-win": "^7.7.2",
+    "discord-rpc": "^4.0.1",
+    "electron-store": "^8.2.0",
+    "systeminformation": "^5.31.6"
+  },
   "build": {
     "appId": "com.stellar.clip",
     "productName": "Stellar",
+    "main": "electron/main.cjs",
     "directories": {
       "output": "release"
     },
@@ -55,9 +57,7 @@
       "target": [
         {
           "target": "portable",
-          "arch": [
-            "x64"
-          ]
+          "arch": ["x64"]
         },
         "nsis"
       ],
